@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>mhassan49</title>
+        <script type="text/javascript" src="../lib/d3.v5.min.js"></script>
+        <script type="text/javascript" src="../lib/d3-scale-chromatic.v1.min.js"></script>
+        <script type="text/javascript" src="../lib/d3-tip.min.js"></script>
+        <script type="text/javascript" src="../lib/topojson.v2.min.js"></script>
+
+        <h1 id="Title">Choropleth Map of County Data</h1>
+
+
+        <style type="text/css">
+
+    body {
+      margin-top: 30px;
+      font-family: 'Source Sans Pro', sans-serif;
+      font-weight: 350;
+      fill:black;
+      text-align: center;
+      margin-top: 50px;
+    }
+
+        .states {
+            fill: none;
+            stroke: #fff;
+            stroke-linejoin: round;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 1px;
+            font-size: 0.9em;
+            pointer-events: none;
+            background: #4C054D;
+            border: 1px solid red;
+            border-radius: 4px;
+            color: white;
+            text-align: left;
+            }
+
+            .tooltip p {
+            margin: 0;
+            padding: 0;
+            }
+
+            .tooltip table {
+            margin: 0;
+            padding: 0;
+            border-collapse: collapse;
+            }
+
+        </style>
+
+    </head>
+
+    <body>
+            <div id="choropleth_map"></div>
+
+    <script>
+
+        var width = 1100,
+            height = 800;
+
+ 
+
+        // Define path generator
+            var path = d3.geoPath() // path generator that will convert GeoJSON to SVG paths
+                //.projection(projection); // tell path generator to use albersUsa projection
+                    
+
+
+                // Define the div for the tooltip
+                    var div = d3.select("#choropleth_map").append("div")	
+                        .attr("class", "tooltip")				
+                        .style("opacity", 0);
+                        
+                    var padding = 100;
+
+                    var svg = d3.select("#choropleth_map").append("svg")
+                        .attr("width", width)
+                        .attr("height", height);
+                        //.style("margin-top", 80);
+                     //   .attr("transform", "translate(" + padding + ",60)");
+                    // Import the CSV data
+
+                 //   console.log(path[0]);
+
+
+             Promise.all([       
+                    d3.csv("county_poverty.csv"),
+                    d3.csv("county_detail.csv"),
+                    d3.json("us.json")
+                    ]).then(function( dataset) {
+
+                    var usPovertyMap = d3.map(); //create the map object
+
+                    // Format the data
+                    dataset[0].forEach(function(data) {
+                    //    d.Month = parseMonth(d.Month);
+                    data.CensusId = +data.CensusId;
+                    data["State"] = data["State"];
+                    data["County"] = data["County"];
+                    data.Poverty = +data.Poverty;
+
+
+                    dataset[1].forEach(function(data2) {
+                    data2.CensusId = +data2.CensusId;
+                    data2.TotalPop = +data2.TotalPop;
+                    data2.IncomePerCap = +data2.IncomePerCap;
+                    
+                    if(data2.CensusId==data.CensusId){
+                       usPovertyMap[data["CensusId"]]={"State": data["State"], "County":data["County"], "Poverty": data.Poverty, "TotalPop":data2.TotalPop, "IncomePerCap":data2.IncomePerCap};
+                    }
+
+                    });                    
+
+
+                    });
+
+                    dataset[1].forEach(function(data) {
+                    data.CensusId = +data.CensusId;
+                    data.TotalPop = +data.TotalPop;
+                    data.IncomePerCap = +data.IncomePerCap;         
+                    });                    
+
+             var colorScale = d3.scaleThreshold()
+                                .domain([2, 4, 6, 8, 10, 12, 14, 16, 18])
+                                .range(["#F1F2F1", "#C0DBC0", "#94C395", "#6DAC65", 
+                                        "#4C9450", "#317C36", "#1C6521", "#0C4D11", "#023607"])
+                                      //.range(["#F9F9F9", "#E0C5CD", "#C797B2", "#AE6FA3", 
+                                        //"#8D4D9F", "#5F317C", "#341B63", "#0F0B4A", "#020C31"])
+    
+                    var nestData1 = d3.nest()
+	                  .key(function(d){
+                        //console.log(d.County);
+                          return d.CensusId;
+                     })
+                      .entries(dataset[0])
+
+                    var nestData2 = d3.nest()
+	                  .key(function(d){
+                        //console.log(d.County);
+                          return d.CensusId;
+                     })
+                      .entries(dataset[1])
+                      
+                     var counties=topojson.feature(dataset[2], dataset[2].objects.counties).features;
+                    //counties.forEach(function(d){console.log(usPovertyMap[+d.id].County)});
+
+                   //  counties.map(function(d) { console.log(d.id)});
+
+                  //console.log(nestData1.key.forEach(function(d){return d.key;}));
+
+
+                    //d3.json("us.json").then(function(us) {
+                    //  if (error) throw error;
+                    //console.log(us);
+                    var countyShapes = svg.append("g")
+                          .attr("class", "counties")
+                        .selectAll("path")
+                          .data(counties)
+                        .enter().append("path")
+                          .attr("d", path)
+                         .style("fill", function(d) { return colorScale(usPovertyMap[+d.id].Poverty); })
+                         .on("mouseover", function(d) {		
+                                div.transition()		
+                                    .duration(200)		
+                                    .style("opacity", 0.6)
+                                div	.html("State: "+usPovertyMap[+d.id].State + "<br/>" + 
+                                          "County: "+usPovertyMap[+d.id].County + "<br/>" +
+                                          "Poverty Rate: "+ usPovertyMap[+d.id].Poverty+"%" +"<br/>" +
+                                          "Total Population: "+usPovertyMap[+d.id].TotalPop +"<br/>"+
+                                          "Income per capita: "+usPovertyMap[+d.id].IncomePerCap)	
+                                    .style("left", (d3.event.pageX-10) + "px")		
+                                    .style("top", (d3.event.pageY - 105) + "px");	
+                                })					
+                            .on("mouseout", function(d) {		
+                                div.transition()		
+                                    .duration(500)		
+                                    .style("opacity", 0);	
+                            });
+                
+
+                    
+                      svg.append("path")
+                          .datum(topojson.mesh(dataset[2], dataset[2].objects.states, function(a, b) { return a.id !== b.id; }))
+                          .attr("class", "states")
+                          .attr("d", path);
+
+
+                          var   legend = svg.selectAll(".legend")
+                                        .data(colorScale.domain())
+                                        .enter().append("g")
+                                        .attr("transform", function(d,i) {
+                                        return "translate(" + (width-135) + "," + (height - 750 + 16 * i) + ")";
+                                        });
+
+                                legend.append("rect")
+                                        .attr("width", 12)
+                                        .attr("height", 12)
+                                        .style("fill", function(d) {
+                                        return colorScale(d-1);
+                                        });
+
+                                legend.append("text")
+                                        .attr("x", 16)
+                                        .attr("y", 11)
+                                        .style("font-size", "12px")
+                                        .text(function(d) {
+                                            if(d==2){
+                                                return ("\u2264"+d+"%");
+                                            }
+                                            else if (d==18){
+                                                return ("\u2265"+d+"%");
+                                            }
+                                            else {
+                                                return (d+"%");
+                                            }
+                                        });
+
+                                svg.append("text")
+                                        .style("font-weight", "bold")
+                                        .style("font-size", "14px")
+                                        .attr("x", width - 150)
+                                        .attr("y", height - 760)
+                                        .text("Poverty Rate");
+                    //});
+                });    
+            </script>
+
+    </body>
